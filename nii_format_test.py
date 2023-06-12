@@ -60,6 +60,8 @@ def main(args : argparse.Namespace) -> None:
     # Create confidence map object
     cm = ConfidenceMap(args.precision, alpha=2.0, beta=90.0, gamma=0.03)
 
+    print(img_data.shape)
+
     for downsample in [None]:
         total_processing_time = 0
         for i in range(img_data.shape[2]):

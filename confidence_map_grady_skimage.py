@@ -1,8 +1,9 @@
-from typing import Literal, Tuple, Optional
+from typing import Literal, Tuple
 
 import numpy as np
 import cv2
 
+from scipy.sparse.linalg import cg, spilu, LinearOperator, spsolve
 from scipy.sparse import csc_matrix
 from scipy.signal import hilbert
 
@@ -10,6 +11,7 @@ from oct2py import Oct2Py
 
 CONJUGATE_GRADIENT_MAX_ITERATIONS = 200
 CONJUGATE_GRADIENT_TOLERANCE = 1e-6
+ONE_SINK_MIDDLE = False
 
 class ConfidenceMap:
     """Confidence map computation class for RF ultrasound data"""
@@ -21,8 +23,6 @@ class ConfidenceMap:
         beta: float = 90.0,
         gamma: float = 0.05,
         mode: Literal["RF", "B"] = "B",
-        sink_mode: Literal["all", "mid", "min", "mask"] = "all",
-        sink_mask: Optional[np.ndarray] = None,
     ):
         """Compute the confidence map
 
@@ -39,11 +39,6 @@ class ConfidenceMap:
         self.beta = beta
         self.gamma = gamma
         self.mode = mode
-        self.sink_mode = sink_mode
-        self.sink_mask = sink_mask
-
-        if self.sink_mode == "mask" and self.sink_mask is None:
-            raise ValueError("Sink mask must be provided when sink mode is mask, please use 'sink_mask' argument.")
 
         # The precision to use for all computations
         self.precision = precision
@@ -285,26 +280,12 @@ class ConfidenceMap:
         labels = np.concatenate((labels, label))
 
         # SINK ELEMENTS - last image row
-        if self.sink_mode == "all":
-            sr_down = np.ones_like(sc) * (data.shape[0] - 1)
-            seed = self.sub2ind(data.shape, sr_down, sc).astype(self.precision)       
-        elif self.sink_mode == "mid":
+        sr_down = np.ones_like(sc) * (data.shape[0] - 1)
+        if ONE_SINK_MIDDLE:
             sc_down = np.array([data.shape[1] // 2])
-            sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
             seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-        elif self.sink_mode == "min":
-            # Find the minimum value in the last row
-            min_val = np.min(data[-1, :])
-            min_idxs = np.where(data[-1, :] == min_val)[0]
-            sc_down = min_idxs
-            sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
-            seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-        elif self.sink_mode == "mask":
-            coords = np.where(self.sink_mask != 0)
-            sr_down = coords[0]
-            sc_down = coords[1]
-            seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-
+        else:
+            seed = self.sub2ind(data.shape, sr_down, sc).astype(self.precision)
         seed = np.unique(seed)
         seeds = np.concatenate((seeds, seed))
 
