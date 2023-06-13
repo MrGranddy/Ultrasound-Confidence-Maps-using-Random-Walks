@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 
 import numpy as np
 
@@ -20,18 +20,29 @@ def sub2ind(size: Tuple[int], rows: np.ndarray, cols: np.ndarray) -> np.ndarray:
     indices = rows + cols * size[0]
     return indices
 
-def get_seed_and_labels():
+def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
+    """Get the seed and label arrays for the max-flow algorithm
+
+    Args:
+        data: Input array
+        sink_mode (str, optional): Sink mode. Defaults to 'all'.
+        sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: Seed and label arrays
+    """
+
     # Seeds and labels (boundary conditions)
-    seeds = np.array([], dtype=self.precision)
-    labels = np.array([], dtype=self.precision)
+    seeds = np.array([], dtype="float64")
+    labels = np.array([], dtype="float64")
 
     # Indices for all columns
-    sc = np.arange(data.shape[1], dtype=self.precision)
+    sc = np.arange(data.shape[1], dtype="float64")
 
     # SOURCE ELEMENTS - 1st matrix row
     # Indices for 1st row, it will be broadcasted with sc
     sr_up = np.array([0])
-    seed = self.sub2ind(data.shape, sr_up, sc).astype(self.precision)
+    seed = sub2ind(data.shape, sr_up, sc).astype("float64")
     seed = np.unique(seed)
     seeds = np.concatenate((seeds, seed))
 
@@ -40,25 +51,25 @@ def get_seed_and_labels():
     labels = np.concatenate((labels, label))
 
     # SINK ELEMENTS - last image row
-    if self.sink_mode == "all":
+    if sink_mode == "all":
         sr_down = np.ones_like(sc) * (data.shape[0] - 1)
-        seed = self.sub2ind(data.shape, sr_down, sc).astype(self.precision)       
-    elif self.sink_mode == "mid":
+        seed = sub2ind(data.shape, sr_down, sc).astype("float64")       
+    elif sink_mode == "mid":
         sc_down = np.array([data.shape[1] // 2])
         sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
-        seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-    elif self.sink_mode == "min":
+        seed = sub2ind(data.shape, sr_down, sc_down).astype("float64")
+    elif sink_mode == "min":
         # Find the minimum value in the last row
         min_val = np.min(data[-1, :])
         min_idxs = np.where(data[-1, :] == min_val)[0]
         sc_down = min_idxs
         sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
-        seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-    elif self.sink_mode == "mask":
-        coords = np.where(self.sink_mask != 0)
+        seed = sub2ind(data.shape, sr_down, sc_down).astype("float64")
+    elif sink_mode == "mask":
+        coords = np.where(sink_mask != 0)
         sr_down = coords[0]
         sc_down = coords[1]
-        seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
+        seed = sub2ind(data.shape, sr_down, sc_down).astype("float64")
 
     seed = np.unique(seed)
     seeds = np.concatenate((seeds, seed))
@@ -66,3 +77,5 @@ def get_seed_and_labels():
     # Label 2
     label = np.ones_like(seed) * 2
     labels = np.concatenate((labels, label))
+
+    return seeds, labels

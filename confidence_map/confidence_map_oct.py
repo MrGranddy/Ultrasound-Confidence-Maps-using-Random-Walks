@@ -8,6 +8,8 @@ from scipy.signal import hilbert
 
 from oct2py import Oct2Py
 
+from confidence_map.utils import get_seed_and_labels
+
 CONJUGATE_GRADIENT_MAX_ITERATIONS = 200
 CONJUGATE_GRADIENT_TOLERANCE = 1e-6
 
@@ -248,51 +250,7 @@ class ConfidenceMap:
         if downsample is not None:
             data = cv2.resize(data, (org_W // downsample, org_H // downsample), interpolation=cv2.INTER_CUBIC)
 
-        # Seeds and labels (boundary conditions)
-        seeds = np.array([], dtype=self.precision)
-        labels = np.array([], dtype=self.precision)
-
-        # Indices for all columns
-        sc = np.arange(data.shape[1], dtype=self.precision)
-
-        # SOURCE ELEMENTS - 1st matrix row
-        # Indices for 1st row, it will be broadcasted with sc
-        sr_up = np.array([0])
-        seed = self.sub2ind(data.shape, sr_up, sc).astype(self.precision)
-        seed = np.unique(seed)
-        seeds = np.concatenate((seeds, seed))
-
-        # Label 1
-        label = np.ones_like(seed)
-        labels = np.concatenate((labels, label))
-
-        # SINK ELEMENTS - last image row
-        if self.sink_mode == "all":
-            sr_down = np.ones_like(sc) * (data.shape[0] - 1)
-            seed = self.sub2ind(data.shape, sr_down, sc).astype(self.precision)       
-        elif self.sink_mode == "mid":
-            sc_down = np.array([data.shape[1] // 2])
-            sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
-            seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-        elif self.sink_mode == "min":
-            # Find the minimum value in the last row
-            min_val = np.min(data[-1, :])
-            min_idxs = np.where(data[-1, :] == min_val)[0]
-            sc_down = min_idxs
-            sr_down = np.ones_like(sc_down) * (data.shape[0] - 1)
-            seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-        elif self.sink_mode == "mask":
-            coords = np.where(self.sink_mask != 0)
-            sr_down = coords[0]
-            sc_down = coords[1]
-            seed = self.sub2ind(data.shape, sr_down, sc_down).astype(self.precision)
-
-        seed = np.unique(seed)
-        seeds = np.concatenate((seeds, seed))
-
-        # Label 2
-        label = np.ones_like(seed) * 2
-        labels = np.concatenate((labels, label))
+        seeds, labels = get_seed_and_labels(data, self.sink_mode, self.sink_mask)
 
         # Attenuation with Beer-Lambert
         W = self.attenuation_weighting(data, self.alpha)

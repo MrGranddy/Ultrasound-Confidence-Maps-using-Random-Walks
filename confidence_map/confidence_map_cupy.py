@@ -34,6 +34,8 @@ class ConfidenceMap:
             mode (str, optional): 'RF' or 'B' mode data. Defaults to 'B'.
         """
 
+        raise NotImplementedError("This backend is not supported anymore, it is slow and not maintained. Please use the 'numpy', 'octave' or other available backend instead.")
+
         # The hyperparameters for confidence map estimation
         self.alpha = alpha
         self.beta = beta

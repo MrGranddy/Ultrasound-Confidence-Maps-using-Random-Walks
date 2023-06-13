@@ -14,12 +14,11 @@ if __name__ == "__main__":
         default="octave",
         help="Backend to use. Can be 'numpy' or 'cupy' or 'octave'",
     )
-
     argparser.add_argument(
-        "--precision",
+        "--sink_mode",
         type=str,
-        default="float64",
-        help="Precision to use. Can be 'float32' or 'float64'",
+        default="mid",
+        help="Sink mode to use. Can be 'all', 'mid' or 'min'",
     )
 
     args = argparser.parse_args()
@@ -27,16 +26,12 @@ if __name__ == "__main__":
     # Import confidence map function from the selected backend
     ConfidenceMap = get_cm_backend(args.backend)
 
-    # Check if the precision is supported
-    if args.precision not in ["float32", "float64"]:
-        raise NotImplementedError(
-            f'The precision "{args.precision}" is not supported.'
-        )
+    precision = "float64"
 
     # Load neck data and call confidence estimation for B-mode with default parameters
     img = scipy.io.loadmat("data/neck.mat")["img"]
     cm = ConfidenceMap(
-        args.precision, alpha=2.0, beta=90.0, gamma=0.03
+        precision, alpha=2.0, beta=90.0, gamma=0.0, sink_mode=args.sink_mode
     )
     map_ = cm(img)
     save_as_npy(map_, "data/neck_result.npy")
@@ -45,7 +40,7 @@ if __name__ == "__main__":
     # Load femur data and call confidence estimation for B-mode with default parameters
     img = scipy.io.loadmat("data/femur.mat")["img"]
     cm = ConfidenceMap(
-        args.precision, alpha=2.0, beta=90.0, gamma=0.06
+        precision, alpha=2.0, beta=90.0, gamma=0.06, sink_mode=args.sink_mode
     )
     map_ = cm(img)
     save_as_npy(map_, "data/femur_result.npy")

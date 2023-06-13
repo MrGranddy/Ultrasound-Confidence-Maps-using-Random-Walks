@@ -1,9 +1,11 @@
-from typing import Literal, Tuple
+from typing import Literal, Tuple, Optional
 
 import numpy as np
 from scipy.sparse.linalg import cg, spilu, LinearOperator, spsolve
 from scipy.sparse import csc_matrix
 from scipy.signal import hilbert
+
+from confidence_map.utils import get_seed_and_labels
 
 CONJUGATE_GRADIENT_MAX_ITERATIONS = 200
 CONJUGATE_GRADIENT_TOLERANCE = 1e-6
@@ -19,6 +21,8 @@ class ConfidenceMap:
         beta: float = 90.0,
         gamma: float = 0.05,
         mode: Literal["RF", "B"] = "B",
+        sink_mode: Literal["all", "mid", "min", "mask"] = "all",
+        sink_mask: Optional[np.ndarray] = None,
     ):
         """Compute the confidence map
 
@@ -28,13 +32,19 @@ class ConfidenceMap:
             beta (float, optional): Beta parameter. Defaults to 90.0.
             gamma (float, optional): Gamma parameter. Defaults to 0.05.
             mode (str, optional): 'RF' or 'B' mode data. Defaults to 'B'.
+            sink_mode (str, optional): Sink mode. Defaults to 'all'.
+            sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
         """
+
+        raise NotImplementedError("Numpy backend currently has a bug, please use the Octave backend.")
 
         # The hyperparameters for confidence map estimation
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.mode = mode
+        self.sink_mode = sink_mode
+        self.sink_mask = sink_mask
 
         # The precision to use for all computations
         self.precision = precision
@@ -266,33 +276,7 @@ class ConfidenceMap:
             # MATLAB hilbert applies the Hilbert transform to columns
             data = np.abs(hilbert(data, axis=0)).astype(self.precision)  # type: ignore
 
-        # Seeds and labels (boundary conditions)
-        seeds = np.array([], dtype=self.precision)
-        labels = np.array([], dtype=self.precision)
-
-        # Indices for all columns
-        sc = np.arange(data.shape[1], dtype=self.precision)
-
-        # SOURCE ELEMENTS - 1st matrix row
-        # Indices for 1st row, it will be broadcasted with sc
-        sr_up = np.array([0])
-        seed = self.sub2ind(data.shape, sr_up, sc).astype(self.precision)
-        seed = np.unique(seed)
-        seeds = np.concatenate((seeds, seed))
-
-        # Label 1
-        label = np.ones_like(seed)
-        labels = np.concatenate((labels, label))
-
-        # SINK ELEMENTS - last image row
-        sr_down = np.ones_like(sc) * (data.shape[0] - 1)
-        seed = self.sub2ind(data.shape, sr_down, sc).astype(self.precision)
-        seed = np.unique(seed)
-        seeds = np.concatenate((seeds, seed))
-
-        # Label 2
-        label = np.ones_like(seed) * 2
-        labels = np.concatenate((labels, label))
+        seeds, labels = get_seed_and_labels(data, sink_mode=self.sink_mode, sink_mask=self.sink_mask)
 
         # Attenuation with Beer-Lambert
         W = self.attenuation_weighting(data, self.alpha)
