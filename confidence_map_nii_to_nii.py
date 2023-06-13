@@ -5,20 +5,15 @@ import time
 import numpy as np
 import nibabel as nib
 
-from confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
-from confidence_map_cupy import ConfidenceMap as ConfidenceMap_cupy
-from confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
-
+from utils import get_cm_backend
 
 def main(args : argparse.Namespace) -> None:
 
     # Import confidence map function from the selected backend
-    if args.backend == "numpy":
-        ConfidenceMap = ConfidenceMap_numpy
-    elif args.backend == "cupy":
-        ConfidenceMap = ConfidenceMap_cupy
-    elif args.backend == "octave":
-        ConfidenceMap = ConfidenceMap_oct
+
+    # Sink modes are not implemented in other than octave backend yet
+    if args.backend == "octave":
+        ConfidenceMap = get_cm_backend(args.backend)
     else:
         # Give error message if the backend is not supported
         raise NotImplementedError(
@@ -32,7 +27,7 @@ def main(args : argparse.Namespace) -> None:
     img_data = img.get_fdata()
 
     # Create confidence map object
-    cm = ConfidenceMap("float64", alpha=2.0, beta=90.0, gamma=0.03)
+    cm = ConfidenceMap("float64", alpha=2.0, beta=90.0, gamma=0.03, sink_mode="mid")
 
     out_data = np.zeros(img_data.shape, dtype=np.float64)
 

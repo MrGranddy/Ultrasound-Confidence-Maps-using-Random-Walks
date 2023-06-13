@@ -3,9 +3,7 @@ import argparse
 import scipy.io
 from visualization_utils import confidence_plotter, show, save_as_npy
 
-from confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
-from confidence_map_cupy import ConfidenceMap as ConfidenceMap_cupy
-from confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
+from utils import get_cm_backend
 
 if __name__ == "__main__":
 
@@ -27,17 +25,7 @@ if __name__ == "__main__":
     args = argparser.parse_args()
 
     # Import confidence map function from the selected backend
-    if args.backend == "numpy":
-        ConfidenceMap = ConfidenceMap_numpy
-    elif args.backend == "cupy":
-        ConfidenceMap = ConfidenceMap_cupy
-    elif args.backend == "octave":
-        ConfidenceMap = ConfidenceMap_oct
-    else:
-        # Give error message if the backend is not supported
-        raise NotImplementedError(
-            f'The backend "{args.backend}" is not supported.'
-        )
+    ConfidenceMap = get_cm_backend(args.backend)
 
     # Check if the precision is supported
     if args.precision not in ["float32", "float64"]:

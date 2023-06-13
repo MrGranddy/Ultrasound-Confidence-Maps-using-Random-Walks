@@ -32,6 +32,8 @@ class ConfidenceMap:
             beta (float, optional): Beta parameter. Defaults to 90.0.
             gamma (float, optional): Gamma parameter. Defaults to 0.05.
             mode (str, optional): 'RF' or 'B' mode data. Defaults to 'B'.
+            sink_mode (str, optional): Sink mode. Defaults to 'all'.
+            sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
         """
 
         # The hyperparameters for confidence map estimation
@@ -223,26 +225,6 @@ class ConfidenceMap:
         probabilities = probabilities.reshape((A.shape[1], A.shape[0])).T
 
         return probabilities
-
-    def sub2ind(
-        self, size: Tuple[int], rows: np.ndarray, cols: np.ndarray
-    ) -> np.ndarray:
-        """Converts row and column subscripts into linear indices,
-        basically the copy of the MATLAB function of the same name.
-        https://www.mathworks.com/help/matlab/ref/sub2ind.html
-
-        This function is Pythonic so the indices start at 0.
-
-        Args:
-            size Tuple[int]: Size of the matrix
-            rows (np.ndarray): Row indices
-            cols (np.ndarray): Column indices
-
-        Returns:
-            indices (np.ndarray): 1-D array of linear indices
-        """
-        indices = rows + cols * size[0]
-        return indices
 
     def __call__(self, data: np.ndarray, downsample=None) -> np.ndarray:
         """Compute the confidence map
