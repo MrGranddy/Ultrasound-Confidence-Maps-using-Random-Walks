@@ -37,12 +37,6 @@ def main(args : argparse.Namespace) -> None:
             f'The backend "{args.backend}" is not supported.'
         )
 
-    # Check if the precision is supported
-    if args.precision not in ["float32", "float64"]:
-        raise NotImplementedError(
-            f'The precision "{args.precision}" is not supported.'
-        )
-
     if not os.path.exists(args.output):
         os.mkdir(args.output)
 
@@ -53,7 +47,7 @@ def main(args : argparse.Namespace) -> None:
     #label_data = label.get_fdata()
 
     # Create confidence map object
-    cm = ConfidenceMap(args.precision, alpha=2.0, beta=90.0, gamma=0.03)
+    cm = ConfidenceMap(alpha=2.0, beta=90.0, gamma=0.03)
 
     print("Image shape:", img_data.shape)
 
@@ -94,12 +88,6 @@ if __name__ == "__main__":
         type=str,
         default="../data/30-labels.nii",
         help="Label file",
-    )
-    argparser.add_argument(
-        "--precision",
-        type=str,
-        default="float64",
-        help="Precision to use. Can be 'float32' or 'float64'",
     )
     argparser.add_argument(
         "--output",
