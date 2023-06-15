@@ -1,4 +1,5 @@
 from typing import Literal, Tuple, Optional
+import cv2
 
 import numpy as np
 
@@ -205,13 +206,8 @@ class ConfidenceMap:
         rhs = -B @ M  # type: ignore
         rhs = rhs.flatten() # Scipy likes it flat
 
-        print("rhs_shape", rhs.shape)
-        print("D_shape", D.shape)
-
         # Solve system exactly
         x = spsolve(D, rhs, use_umfpack=True)
-
-        print("x: ", np.unique(x))
 
         # Prepare output
         probabilities = np.zeros((N,), dtype="float64")
