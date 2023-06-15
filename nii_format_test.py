@@ -2,10 +2,11 @@ import argparse
 import os
 import time
 
+import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
 
-from confidence_map.confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
+from confidence_map.confidence_map_scipy import ConfidenceMap as ConfidenceMap_scipy
 from confidence_map.confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
 
 def save_results(img, map_, output_path):
@@ -28,7 +29,7 @@ def main(args : argparse.Namespace) -> None:
 
     # Import confidence map function from the selected backend
     if args.backend == "numpy":
-        ConfidenceMap = ConfidenceMap_numpy
+        ConfidenceMap = ConfidenceMap_scipy
     elif args.backend == "octave":
         ConfidenceMap = ConfidenceMap_oct
     else:
@@ -50,23 +51,25 @@ def main(args : argparse.Namespace) -> None:
     cm = ConfidenceMap(alpha=2.0, beta=90.0, gamma=0.03)
 
     print("Image shape:", img_data.shape)
+    if args.early_stopping is not None:
+        print(f"Early stopping after {args.early_stopping} slices")
 
     early_stopping = args.early_stopping
 
     for downsample in [None]: # You can add downsampling factors here
-        total_processing_time = 0
+        processing_times = []
         for i in range(min(early_stopping, img_data.shape[2])):
             print(f"Processing slice {i}...")
 
             start_time = time.time()
             map_ = cm(img_data[..., i])
-            total_processing_time += time.time() - start_time
+            processing_times.append(time.time() - start_time)
             
             # Save results
             save_results(img_data[..., i], map_, os.path.join(args.output, f"{i}.png"))
 
-        print(f"Total processing time with downsampling {downsample}: {total_processing_time} seconds")
-        print(f"Average processing time per slice with downsampling {downsample}: {total_processing_time / img_data.shape[2]} seconds")
+        print(f"Mean and std processing time: {np.mean(processing_times)} +- {np.std(processing_times)}")
+        print(f"Processing times: {processing_times}")
 
 
 if __name__ == "__main__":
