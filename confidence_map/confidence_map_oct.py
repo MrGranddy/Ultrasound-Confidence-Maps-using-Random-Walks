@@ -1,12 +1,11 @@
 from typing import Literal, Tuple, Optional
 
 import numpy as np
+from oct2py import Oct2Py
 import cv2
 
 from scipy.sparse import csc_matrix
 from scipy.signal import hilbert
-
-from oct2py import Oct2Py
 
 from confidence_map.utils import get_seed_and_labels
 
@@ -18,7 +17,6 @@ class ConfidenceMap:
 
     def __init__(
         self,
-        precision: Literal["float16", "float32", "float64"] = "float32",
         alpha: float = 2.0,
         beta: float = 90.0,
         gamma: float = 0.05,
@@ -50,8 +48,7 @@ class ConfidenceMap:
             raise ValueError("Sink mask must be provided when sink mode is mask, please use 'sink_mask' argument.")
 
         # The precision to use for all computations
-        self.precision = precision
-        self.eps = np.finfo(self.precision).eps
+        self.eps = np.finfo("float64").eps
 
         # Octave instance for computing the confidence map
         self.oc = Oct2Py()
@@ -72,7 +69,7 @@ class ConfidenceMap:
         """
 
         # Create depth vector and repeat it for each column
-        Dw = np.linspace(0, 1, A.shape[0], dtype=self.precision)
+        Dw = np.linspace(0, 1, A.shape[0], dtype="float64")
         Dw = np.tile(Dw.reshape(-1, 1), (1, A.shape[1]))
 
         W = 1.0 - np.exp(-alpha * Dw)  # Compute exp inline
@@ -104,7 +101,7 @@ class ConfidenceMap:
         i = P[p] - 1  # Index vector
         j = P[p] - 1  # Index vector
         # Entries vector, initially for diagonal
-        s = np.zeros_like(p, dtype=self.precision)
+        s = np.zeros_like(p, dtype="float64")
 
         vl = 0  # Vertical edges length
 
@@ -152,7 +149,7 @@ class ConfidenceMap:
 
         # Gaussian weighting function
         s = -(
-            (np.exp(-beta * s, dtype=self.precision)) + 1.0e-6
+            (np.exp(-beta * s, dtype="float64")) + 1.0e-6
         )  # --> This epsilon changes results drastically default: 1.e-6
 
         # Create Laplacian, diagonal missing
@@ -207,7 +204,7 @@ class ConfidenceMap:
         D = csc_matrix(D[keep_indices, :][:, keep_indices])
 
         # Define M matrix
-        M = np.zeros((seeds.shape[0], 1), dtype=self.precision)
+        M = np.zeros((seeds.shape[0], 1), dtype="float64")
         M[:, 0] = labels == 1
 
         # Right-handside (-B^T*M)
@@ -217,7 +214,7 @@ class ConfidenceMap:
         x = self.oc.mldivide(D, rhs)[:, 0]
 
         # Prepare output
-        probabilities = np.zeros((N,), dtype=self.precision)
+        probabilities = np.zeros((N,), dtype="float64")
         # Probabilities for unmarked nodes
         probabilities[i_U] = x
         # Max probability for marked node
@@ -239,12 +236,12 @@ class ConfidenceMap:
         """
 
         # Normalize data
-        data = data.astype(self.precision)
+        data = data.astype("float64")
         data = self.normalize(data)
 
         if self.mode == "RF":
             # MATLAB hilbert applies the Hilbert transform to columns
-            data = np.abs(hilbert(data, axis=0)).astype(self.precision)  # type: ignore
+            data = np.abs(hilbert(data, axis=0)).astype("float64")  # type: ignore
 
         org_H, org_W = data.shape
         if downsample is not None:

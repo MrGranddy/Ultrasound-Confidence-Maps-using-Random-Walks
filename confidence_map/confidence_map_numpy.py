@@ -1,22 +1,18 @@
 from typing import Literal, Tuple, Optional
 
 import numpy as np
-from scipy.sparse.linalg import cg, spilu, LinearOperator, spsolve
+
+from scipy.sparse.linalg import spsolve
 from scipy.sparse import csc_matrix
 from scipy.signal import hilbert
 
 from confidence_map.utils import get_seed_and_labels
-
-CONJUGATE_GRADIENT_MAX_ITERATIONS = 200
-CONJUGATE_GRADIENT_TOLERANCE = 1e-6
-EXACT_SOLUTION = True
 
 class ConfidenceMap:
     """Confidence map computation class for RF ultrasound data"""
 
     def __init__(
         self,
-        precision: Literal["float16", "float32", "float64"] = "float32",
         alpha: float = 2.0,
         beta: float = 90.0,
         gamma: float = 0.05,
@@ -36,8 +32,6 @@ class ConfidenceMap:
             sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
         """
 
-        raise NotImplementedError("Numpy backend currently has a bug, please use the Octave backend.")
-
         # The hyperparameters for confidence map estimation
         self.alpha = alpha
         self.beta = beta
@@ -46,9 +40,12 @@ class ConfidenceMap:
         self.sink_mode = sink_mode
         self.sink_mask = sink_mask
 
+        if self.sink_mode == "mask" and self.sink_mask is None:
+            raise ValueError("Sink mask must be provided when sink mode is mask, please use 'sink_mask' argument.")
+
         # The precision to use for all computations
-        self.precision = precision
-        self.eps = np.finfo(self.precision).eps
+        self.eps = np.finfo("float64").eps
+
 
     def normalize(self, inp: np.ndarray) -> np.ndarray:
         """Normalize an array to [0, 1]"""
@@ -66,7 +63,7 @@ class ConfidenceMap:
         """
 
         # Create depth vector and repeat it for each column
-        Dw = np.linspace(0, 1, A.shape[0], dtype=self.precision)
+        Dw = np.linspace(0, 1, A.shape[0], dtype="float64")
         Dw = np.tile(Dw.reshape(-1, 1), (1, A.shape[1]))
 
         W = 1.0 - np.exp(-alpha * Dw)  # Compute exp inline
@@ -98,7 +95,7 @@ class ConfidenceMap:
         i = P[p] - 1  # Index vector
         j = P[p] - 1  # Index vector
         # Entries vector, initially for diagonal
-        s = np.zeros_like(p, dtype=self.precision)
+        s = np.zeros_like(p, dtype="float64")
 
         vl = 0  # Vertical edges length
 
@@ -146,7 +143,7 @@ class ConfidenceMap:
 
         # Gaussian weighting function
         s = -(
-            (np.exp(-beta * s, dtype=self.precision)) + 1.0e-6
+            (np.exp(-beta * s, dtype="float64")) + 1.0e-6
         )  # --> This epsilon changes results drastically default: 1.e-6
 
         # Create Laplacian, diagonal missing
@@ -201,33 +198,23 @@ class ConfidenceMap:
         D = csc_matrix(D[keep_indices, :][:, keep_indices])
 
         # Define M matrix
-        M = np.zeros((seeds.shape[0], 1), dtype=self.precision)
+        M = np.zeros((seeds.shape[0], 1), dtype="float64")
         M[:, 0] = labels == 1
 
         # Right-handside (-B^T*M)
         rhs = -B @ M  # type: ignore
+        rhs = rhs.flatten() # Scipy likes it flat
 
-        if EXACT_SOLUTION:
-            # Solve system exactly
-            x = spsolve(D, rhs, use_umfpack=True)[0]
-        else:
-            # Compute an incomplete LU decomposition for use as a preconditioner
-            lu = spilu(D)
-            preconditioner_M = LinearOperator(
-                D.shape, lu.solve, dtype=self.precision  # type: ignore
-            )  # Create a linear operator to use as the preconditioner
+        print("rhs_shape", rhs.shape)
+        print("D_shape", D.shape)
 
-            # Solve system
-            x = cg(
-                D,
-                rhs,
-                tol=CONJUGATE_GRADIENT_TOLERANCE,
-                maxiter=CONJUGATE_GRADIENT_MAX_ITERATIONS,
-                M=preconditioner_M,
-            )[0]
+        # Solve system exactly
+        x = spsolve(D, rhs, use_umfpack=True)
+
+        print("x: ", np.unique(x))
 
         # Prepare output
-        probabilities = np.zeros((N,), dtype=self.precision)
+        probabilities = np.zeros((N,), dtype="float64")
         # Probabilities for unmarked nodes
         probabilities[i_U] = x
         # Max probability for marked node
@@ -238,27 +225,7 @@ class ConfidenceMap:
 
         return probabilities
 
-    def sub2ind(
-        self, size: Tuple[int], rows: np.ndarray, cols: np.ndarray
-    ) -> np.ndarray:
-        """Converts row and column subscripts into linear indices,
-        basically the copy of the MATLAB function of the same name.
-        https://www.mathworks.com/help/matlab/ref/sub2ind.html
-
-        This function is Pythonic so the indices start at 0.
-
-        Args:
-            size Tuple[int]: Size of the matrix
-            rows (np.ndarray): Row indices
-            cols (np.ndarray): Column indices
-
-        Returns:
-            indices (np.ndarray): 1-D array of linear indices
-        """
-        indices = rows + cols * size[0]
-        return indices
-
-    def __call__(self, data: np.ndarray) -> np.ndarray:
+    def __call__(self, data: np.ndarray, downsample=None) -> np.ndarray:
         """Compute the confidence map
 
         Args:
@@ -269,14 +236,18 @@ class ConfidenceMap:
         """
 
         # Normalize data
-        data = data.astype(self.precision)
+        data = data.astype("float64")
         data = self.normalize(data)
 
         if self.mode == "RF":
             # MATLAB hilbert applies the Hilbert transform to columns
-            data = np.abs(hilbert(data, axis=0)).astype(self.precision)  # type: ignore
+            data = np.abs(hilbert(data, axis=0)).astype("float64")  # type: ignore
 
-        seeds, labels = get_seed_and_labels(data, sink_mode=self.sink_mode, sink_mask=self.sink_mask)
+        org_H, org_W = data.shape
+        if downsample is not None:
+            data = cv2.resize(data, (org_W // downsample, org_H // downsample), interpolation=cv2.INTER_CUBIC)
+
+        seeds, labels = get_seed_and_labels(data, self.sink_mode, self.sink_mask)
 
         # Attenuation with Beer-Lambert
         W = self.attenuation_weighting(data, self.alpha)
@@ -289,4 +260,8 @@ class ConfidenceMap:
         # Find condidence values
         map_ = self.confidence_estimation(data, seeds, labels, self.beta, self.gamma)
 
+        if downsample is not None:
+            map_ = cv2.resize(map_, (org_W, org_H), interpolation=cv2.INTER_CUBIC)
+
         return map_
+

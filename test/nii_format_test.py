@@ -2,14 +2,11 @@ import argparse
 import os
 import time
 
-import numpy as np
 import nibabel as nib
 import matplotlib.pyplot as plt
-from scipy.ndimage import affine_transform
 
-from confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
-from confidence_map_cupy import ConfidenceMap as ConfidenceMap_cupy
-from confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
+from confidence_map.confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
+from confidence_map.confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
 
 def save_results(img, map_, output_path):
     plt.figure(figsize=(10, 5))
@@ -32,8 +29,6 @@ def main(args : argparse.Namespace) -> None:
     # Import confidence map function from the selected backend
     if args.backend == "numpy":
         ConfidenceMap = ConfidenceMap_numpy
-    elif args.backend == "cupy":
-        ConfidenceMap = ConfidenceMap_cupy
     elif args.backend == "octave":
         ConfidenceMap = ConfidenceMap_oct
     else:
@@ -60,11 +55,13 @@ def main(args : argparse.Namespace) -> None:
     # Create confidence map object
     cm = ConfidenceMap(args.precision, alpha=2.0, beta=90.0, gamma=0.03)
 
-    print(img_data.shape)
+    print("Image shape:", img_data.shape)
 
-    for downsample in [None]:
+    early_stopping = args.early_stopping
+
+    for downsample in [None]: # You can add downsampling factors here
         total_processing_time = 0
-        for i in range(img_data.shape[2]):
+        for i in range(min(early_stopping, img_data.shape[2])):
             print(f"Processing slice {i}...")
 
             start_time = time.time()
@@ -84,7 +81,7 @@ if __name__ == "__main__":
         "--backend",
         type=str,
         default="octave",
-        help="Backend to use. Can be 'numpy' or 'cupy' or 'octave'",
+        help="Backend to use. Can be 'numpy' or 'octave'",
     )
     argparser.add_argument(
         "--input",
@@ -109,6 +106,12 @@ if __name__ == "__main__":
         type=str,
         default="../nii_test/",
         help="Output directory",
+    )
+    argparser.add_argument(
+        "--early_stopping",
+        type=int,
+        default=100,
+        help="Early stopping iterations, if you just want to test speed",
     )
 
     args = argparser.parse_args()

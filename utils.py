@@ -1,5 +1,4 @@
 from confidence_map.confidence_map_numpy import ConfidenceMap as ConfidenceMap_numpy
-from confidence_map.confidence_map_cupy import ConfidenceMap as ConfidenceMap_cupy
 from confidence_map.confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
 
 
@@ -18,8 +17,6 @@ def get_cm_backend(backend):
 
     if backend == "numpy":
         ConfidenceMap = ConfidenceMap_numpy
-    elif backend == "cupy":
-        ConfidenceMap = ConfidenceMap_cupy
     elif backend == "octave":
         ConfidenceMap = ConfidenceMap_oct
     else:
