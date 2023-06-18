@@ -102,7 +102,7 @@ class ConfidenceMap:
         j = np.arange(m * n * h, dtype="int64")
 
         # Vertical moves
-        vertical_moving_edges = np.zeros((0), dtype="int64")
+        penalty_edges = np.zeros((0), dtype="int64")
 
         for vertical_move in [-1, 0, 1]:
             for horizontal_move in [-1, 0, 1]:
@@ -143,9 +143,9 @@ class ConfidenceMap:
                     jj = neighbor_idx[:, 0] * n * h + neighbor_idx[:, 1] * h + neighbor_idx[:, 2]
                     j = np.concatenate((j, jj))
 
-                    if vertical_move != 0:
-                        curr_vertical_moves = s.shape[0] + np.arange(neighbor_idx.shape[0])
-                        vertical_moving_edges = np.concatenate((vertical_moving_edges, curr_vertical_moves))
+                    if horizontal_move != 0 or stack_move != 0:
+                        curr_penalty_moves = s.shape[0] + np.arange(neighbor_idx.shape[0])
+                        penalty_edges = np.concatenate((penalty_edges, curr_penalty_moves))
 
                     # Add the entries to the entries vector
                     s = np.concatenate((s, W))
@@ -155,7 +155,7 @@ class ConfidenceMap:
         s = self.normalize(s)
 
         # Horizontal penalty
-        #s[vertical_moving_edges] += gamma
+        s[penalty_edges] += gamma
 
         #s[vertical_end:diagonal_end] += gamma * np.sqrt(2) # --> In the paper it is sqrt(2) since the diagonal edges are longer yet does not exist in the original code
 

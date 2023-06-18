@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 
 from confidence_map.confidence_map_scipy import ConfidenceMap as ConfidenceMap_scipy
 from confidence_map.confidence_map_oct import ConfidenceMap as ConfidenceMap_oct
+from confidence_map.confidence_map_cupy import ConfidenceMap as ConfidenceMap_cupy
 
 def save_results(img, map_, output_path):
     plt.figure(figsize=(10, 5))
@@ -32,6 +33,8 @@ def main(args : argparse.Namespace) -> None:
         ConfidenceMap = ConfidenceMap_scipy
     elif args.backend == "octave":
         ConfidenceMap = ConfidenceMap_oct
+    elif args.backend == "cupy":
+        ConfidenceMap = ConfidenceMap_cupy
     else:
         # Give error message if the backend is not supported
         raise NotImplementedError(
