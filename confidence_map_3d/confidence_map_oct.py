@@ -97,9 +97,15 @@ class ConfidenceMap:
         idx_tensor = np.indices((m, n, h))
 
         # Entries vector, initially for self loops
-        s = np.zeros((m * n * h), dtype="float64")
+        s = np.zeros((m * n * h), dtype="float64") # filter non-zero values
         i = np.arange(m * n * h, dtype="int64")
         j = np.arange(m * n * h, dtype="int64")
+
+        zeromap = A == 0
+        zeromap = zeromap.reshape(-1)
+
+        nonvalid_mask = np.zeros((m * n * h), dtype="bool")
+        nonvalid_mask[zeromap] = True
 
         # Vertical moves
         penalty_edges = np.zeros((0), dtype="int64")
@@ -138,6 +144,9 @@ class ConfidenceMap:
 
                     W = np.abs(neigh_values - current_values).reshape(-1)
 
+                    nonvalid = (neigh_values == 0) | (current_values == 0)
+                    nonvalid_mask = np.concatenate((nonvalid_mask, nonvalid))
+
                     ii = current_idx[:, 0] * n * h + current_idx[:, 1] * h + current_idx[:, 2]
                     i = np.concatenate((i, ii))
                     jj = neighbor_idx[:, 0] * n * h + neighbor_idx[:, 1] * h + neighbor_idx[:, 2]
@@ -150,9 +159,8 @@ class ConfidenceMap:
                     # Add the entries to the entries vector
                     s = np.concatenate((s, W))
 
-
         # Normalize weights
-        s = self.normalize(s)
+        s[~nonvalid_mask] = self.normalize(s[~nonvalid_mask])
 
         # Horizontal penalty
         s[penalty_edges] += gamma
@@ -160,12 +168,15 @@ class ConfidenceMap:
         #s[vertical_end:diagonal_end] += gamma * np.sqrt(2) # --> In the paper it is sqrt(2) since the diagonal edges are longer yet does not exist in the original code
 
         # Normalize differences
-        s = self.normalize(s)
+        s[~nonvalid_mask] = self.normalize(s[~nonvalid_mask])
+
 
         # Gaussian weighting function
         s = -(
             (np.exp(-beta * s, dtype="float64")) + 1.0e-6
         )  # --> This epsilon changes results drastically default: 1.e-6
+
+        s[nonvalid_mask] = -1.0e-6
 
         # Create Laplacian, diagonal missing
         L = csc_matrix((s, (i, j)))
@@ -196,8 +207,17 @@ class ConfidenceMap:
             map: Confidence map which shows the probability of each pixel belonging to the source or sink group.
         """
 
+        zeromap = A == 0
+        zeromap = zeromap.reshape(-1)
+
         # Laplacian
         D = self.confidence_laplacian(A, beta, gamma)
+
+        # seed_mask = np.zeros((A.shape[0] * A.shape[1] * A.shape[2]), dtype="bool")
+        # seed_mask[seeds.astype(int)] = True
+
+        # seeds = np.where(seed_mask[~zeromap])[0]
+
 
         # Select marked columns from Laplacian to create L_M and B^T
         B = D[:, seeds]
@@ -231,6 +251,8 @@ class ConfidenceMap:
         # Final reshape with same size as input image (no padding)
         probabilities = probabilities.reshape((A.shape[0], A.shape[1], A.shape[2]))
 
+        print(np.unique(probabilities))
+
         return probabilities
 
     def __call__(self, data: np.ndarray, downsample=None) -> np.ndarray:
@@ -245,8 +267,9 @@ class ConfidenceMap:
 
         # Normalize data
         data = data.astype("float64")
-        data = self.normalize(data)
+        data[data != 0] = self.normalize(data[data != 0])
 
+        # RF mode does not currently work, need to check how it works with non-zero maskings
         if self.mode == "RF":
             # MATLAB hilbert applies the Hilbert transform to columns
             data = np.abs(hilbert(data, axis=0)).astype("float64")  # type: ignore

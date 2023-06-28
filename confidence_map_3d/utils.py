@@ -32,11 +32,14 @@ def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Op
     Args:
         data: Input array
         sink_mode (str, optional): Sink mode. Defaults to 'all'.
-        sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
+        sink_mask (np.ndarray, optional): Source-sink sink_mask. 1's for source, 2's for sink. Defaults to None.
 
     Returns:
         Tuple[np.ndarray, np.ndarray]: Seed and label arrays
     """
+
+    if sink_mode == "mask" and sink_mask is None:
+        raise ValueError("sink_mask must be provided when sink_mode is 'mask'")
 
     # Seeds and labels (boundary conditions)
     seeds = np.array([], dtype="float64")
@@ -47,14 +50,26 @@ def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Op
 
     # SOURCE ELEMENTS - Upper plane of the image
 
-    # Indices for the upper plane
-    upper_plane = idx_tensor[:, 0, :, :]
+    if sink_mode == "mask" and np.sum(sink_mask == 1) != 0:
 
-    row_idx = upper_plane[0, ...]
-    column_idx = upper_plane[1, ...]
-    stack_idx = upper_plane[2, ...]
+        coords = np.where(sink_mask == 1)
 
-    seed = sub2ind(data.shape, row_idx, column_idx, stack_idx).astype("float64").reshape(-1)
+        row_idx = coords[0]
+        column_idx = coords[1]
+        stack_idx = coords[2]
+
+        seed = sub2ind(data.shape, row_idx, column_idx, stack_idx).astype("float64").reshape(-1)
+
+    else:
+        # Indices for the upper plane
+        upper_plane = idx_tensor[:, 0, :, :]
+
+        row_idx = upper_plane[0, ...]
+        column_idx = upper_plane[1, ...]
+        stack_idx = upper_plane[2, ...]
+
+        seed = sub2ind(data.shape, row_idx, column_idx, stack_idx).astype("float64").reshape(-1)
+    
     seeds = np.concatenate((seeds, seed))
 
     # Label 1
@@ -95,7 +110,7 @@ def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Op
         seed = sub2ind(data.shape, row_idx, column_idx, stack_idx).astype("float64").reshape(-1)
 
     elif sink_mode == "mask":
-        coords = np.where(sink_mask != 0)
+        coords = np.where(sink_mask == 2)
 
         row_idx = coords[0]
         column_idx = coords[1]
@@ -103,11 +118,22 @@ def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Op
 
         seed = sub2ind(data.shape, row_idx, column_idx, stack_idx).astype("float64").reshape(-1)
 
+    else:
+        raise ValueError("sink_mode must be one of 'all', 'mid', 'min' or 'mask'")
+
     seed = np.unique(seed)
     seeds = np.concatenate((seeds, seed))
 
     # Label 2
     label = np.ones_like(seed) * 2
     labels = np.concatenate((labels, label))
+
+    canvas = np.zeros((data.shape[0] * data.shape[1]), dtype="float64")
+    canvas[seeds.astype(int)] = 1
+    canvas = canvas.reshape((data.shape[0], data.shape[1]))
+
+    import matplotlib.pyplot as plt
+    plt.imshow(canvas)
+    plt.show()
 
     return seeds, labels
