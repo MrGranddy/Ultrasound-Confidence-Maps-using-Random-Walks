@@ -213,11 +213,12 @@ class ConfidenceMap:
         # Laplacian
         D = self.confidence_laplacian(A, beta, gamma)
 
-        # seed_mask = np.zeros((A.shape[0] * A.shape[1] * A.shape[2]), dtype="bool")
-        # seed_mask[seeds.astype(int)] = True
+        seed_mask = np.zeros((A.shape[0] * A.shape[1] * A.shape[2]), dtype="bool")
+        seed_mask[seeds.astype(int)] = True
 
-        # seeds = np.where(seed_mask[~zeromap])[0]
+        seeds = np.where(seed_mask[~zeromap])[0]
 
+        D = D[~zeromap, :][:, ~zeromap]
 
         # Select marked columns from Laplacian to create L_M and B^T
         B = D[:, seeds]
@@ -225,10 +226,16 @@ class ConfidenceMap:
         # Select marked nodes to create B^T
         N = A.shape[0] * A.shape[1] * A.shape[2]
         i_U = np.setdiff1d(np.arange(N), seeds.astype(int))  # Index of unmarked nodes
+
+        i_U_mask = np.zeros((N,), dtype="bool")
+        i_U_mask[i_U] = True
+        i_U = i_U_mask[~zeromap]
+
         B = B[i_U, :]
 
         # Remove marked nodes from Laplacian by deleting rows and cols
         keep_indices = np.setdiff1d(np.arange(D.shape[0]), seeds)
+
         D = csc_matrix(D[keep_indices, :][:, keep_indices])
 
         # Define M matrix

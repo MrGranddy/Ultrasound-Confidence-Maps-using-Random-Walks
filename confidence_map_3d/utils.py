@@ -131,9 +131,5 @@ def get_seed_and_labels(data : np.ndarray, sink_mode: str = "all", sink_mask: Op
     canvas = np.zeros((data.shape[0] * data.shape[1]), dtype="float64")
     canvas[seeds.astype(int)] = 1
     canvas = canvas.reshape((data.shape[0], data.shape[1]))
-
-    import matplotlib.pyplot as plt
-    plt.imshow(canvas)
-    plt.show()
-
+    
     return seeds, labels

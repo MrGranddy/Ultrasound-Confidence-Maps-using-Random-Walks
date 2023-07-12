@@ -1,56 +1,94 @@
-from typing import Literal, Tuple, Optional
-
+import cv2
 import numpy as np
 from oct2py import Oct2Py
-import cv2
-
 from scipy.sparse import csc_matrix
 from scipy.signal import hilbert
+from typing import Tuple, Optional, Literal
 
-from confidence_map.utils import get_seed_and_labels
+class UltrasoundConfidenceMap:
+    """Compute confidence map from an ultrasound image.
+    This transform uses the method introduced by Karamalis et al. in https://doi.org/10.1016/j.media.2012.07.005.
+    It generates a confidence map by setting source and sink points in the image and computing the probability
+    for random walks to reach the source for each pixel.
 
-CONJUGATE_GRADIENT_MAX_ITERATIONS = 200
-CONJUGATE_GRADIENT_TOLERANCE = 1e-6
+    Args:
+        alpha (float, optional): Alpha parameter. Defaults to 2.0.
+        beta (float, optional): Beta parameter. Defaults to 90.0.
+        gamma (float, optional): Gamma parameter. Defaults to 0.05.
+        mode (str, optional): 'RF' or 'B' mode data. Defaults to 'B'.
+    """
 
-class ConfidenceMap:
-    """Confidence map computation class for RF ultrasound data"""
+    def __init__(self, alpha: float = 2.0, beta: float = 90.0, gamma: float = 0.05, mode: Literal["RF", "B"] = "B"):
 
-    def __init__(
-        self,
-        alpha: float = 2.0,
-        beta: float = 90.0,
-        gamma: float = 0.05,
-        mode: Literal["RF", "B"] = "B",
-        sink_mode: Literal["all", "mid", "min", "mask"] = "all",
-        sink_mask: Optional[np.ndarray] = None,
-    ):
-        """Compute the confidence map
-
-        Args:
-            alpha (float, optional): Alpha parameter. Defaults to 2.0.
-            beta (float, optional): Beta parameter. Defaults to 90.0.
-            gamma (float, optional): Gamma parameter. Defaults to 0.05.
-            mode (str, optional): 'RF' or 'B' mode data. Defaults to 'B'.
-            sink_mode (str, optional): Sink mode. Defaults to 'all'.
-            sink_mask (np.ndarray, optional): Sink mask. Defaults to None.
-        """
-
-        # The hyperparameters for confidence map estimation
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.mode = mode
-        self.sink_mode = sink_mode
-        self.sink_mask = sink_mask
-
-        if self.sink_mode == "mask" and self.sink_mask is None:
-            raise ValueError("Sink mask must be provided when sink mode is mask, please use 'sink_mask' argument.")
 
         # The precision to use for all computations
         self.eps = np.finfo("float64").eps
 
         # Octave instance for computing the confidence map
         self.oc = Oct2Py()
+
+    def sub2ind(self, size: Tuple[int], rows: np.ndarray, cols: np.ndarray) -> np.ndarray:
+        """Converts row and column subscripts into linear indices,
+        basically the copy of the MATLAB function of the same name.
+        https://www.mathworks.com/help/matlab/ref/sub2ind.html
+
+        This function is Pythonic so the indices start at 0.
+
+        Args:
+            size Tuple[int]: Size of the matrix
+            rows (np.ndarray): Row indices
+            cols (np.ndarray): Column indices
+
+        Returns:
+            indices (np.ndarray): 1-D array of linear indices
+        """
+        indices = rows + cols * size[0]
+        return indices
+
+    def get_seed_and_labels(self, data: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Get the seed and label arrays for the max-flow algorithm
+
+        Args:
+            data: Input array
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Seed and label arrays
+        """
+
+        # Seeds and labels (boundary conditions)
+        seeds = np.array([], dtype="float64")
+        labels = np.array([], dtype="float64")
+
+        # Indices for all columns
+        sc = np.arange(data.shape[1], dtype="float64")
+
+        # SOURCE ELEMENTS - 1st matrix row
+        # Indices for 1st row, it will be broadcasted with sc
+        sr_up = np.array([0])
+        seed = self.sub2ind(data.shape, sr_up, sc).astype("float64")
+        seed = np.unique(seed)
+        seeds = np.concatenate((seeds, seed))
+
+        # Label 1
+        label = np.ones_like(seed)
+        labels = np.concatenate((labels, label))
+
+        # SINK ELEMENTS - last image row
+        sr_down = np.ones_like(sc) * (data.shape[0] - 1)
+        seed = self.sub2ind(data.shape, sr_down, sc).astype("float64")
+
+        seed = np.unique(seed)
+        seeds = np.concatenate((seeds, seed))
+
+        # Label 2
+        label = np.ones_like(seed) * 2
+        labels = np.concatenate((labels, label))
+
+        return seeds, labels
 
     def normalize(self, inp: np.ndarray) -> np.ndarray:
         """Normalize an array to [0, 1]"""
@@ -77,7 +115,7 @@ class ConfidenceMap:
 
     def confidence_laplacian(
         self, P: np.ndarray, A: np.ndarray, beta: float, gamma: float
-    ) -> csc_matrix:
+    ) -> csc_matrix:  # type: ignore
         """Compute 6-Connected Laplacian for confidence estimation problem
 
         Args:
@@ -141,7 +179,7 @@ class ConfidenceMap:
 
         # Horizontal penalty
         s[:vertical_end] += gamma
-        #s[vertical_end:diagonal_end] += gamma * np.sqrt(2) # --> In the paper it is sqrt(2) since the diagonal edges are longer yet does not exist in the original code
+        # s[vertical_end:diagonal_end] += gamma * np.sqrt(2) # --> In the paper it is sqrt(2) since the diagonal edges are longer yet does not exist in the original code
 
         # Normalize differences
         s = self.normalize(s)
@@ -246,7 +284,7 @@ class ConfidenceMap:
         if downsample is not None:
             data = cv2.resize(data, (org_W // downsample, org_H // downsample), interpolation=cv2.INTER_CUBIC)
 
-        seeds, labels = get_seed_and_labels(data, self.sink_mode, self.sink_mask)
+        seeds, labels = self.get_seed_and_labels(data)
 
         # Attenuation with Beer-Lambert
         W = self.attenuation_weighting(data, self.alpha)
@@ -263,4 +301,3 @@ class ConfidenceMap:
             map_ = cv2.resize(map_, (org_W, org_H), interpolation=cv2.INTER_CUBIC)
 
         return map_
-
